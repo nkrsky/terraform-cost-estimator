@@ -5,9 +5,12 @@ import requests
 from pathlib import Path
 
 GITHUB_TOKEN = os.getenv("INFRACOST_GITHUB_TOKEN")
+INFRACOST_API_KEY = os.getenv("INFRACOST_API_KEY")
 REPO = os.getenv("GITHUB_REPOSITORY")
 PR_NUMBER = os.getenv("GITHUB_REF").split('/')[-2]
 
+# Print the API key to confirm it's loaded (WARNING: Avoid in production)
+print(f"[DEBUG] INFRACOST_API_KEY: {INFRACOST_API_KEY}")
 
 def run_infracost(plan_file):
     result = subprocess.run([
@@ -16,12 +19,11 @@ def run_infracost(plan_file):
         "--format", "json",
         "--log-level", "error"
     ], capture_output=True, text=True)
-
+    
     if result.returncode != 0:
         print(f"❌ Infracost failed on {plan_file}: {result.stderr}")
         return None
     return json.loads(result.stdout)
-
 
 def summarize_costs(infracost_json):
     resources = infracost_json.get("projects", [])[0].get("breakdown", {}).get("resources", [])
@@ -41,7 +43,6 @@ def summarize_costs(infracost_json):
 {summary}
 """
 
-
 def post_comment(body):
     url = f"https://api.github.com/repos/{REPO}/issues/{PR_NUMBER}/comments"
     headers = {
@@ -53,7 +54,6 @@ def post_comment(body):
         print("❌ Failed to post comment:", response.text)
     else:
         print("✅ Infracost comment posted successfully.")
-
 
 # Main logic
 summaries = []
