@@ -1,25 +1,47 @@
 import os
-import sys
 import subprocess
 import json
 import requests
 from pathlib import Path
 
-if len(sys.argv) < 3:
-    print("❌ Missing required arguments: INFRACOST_API_KEY and GITHUB_TOKEN")
+# 🔐 Provide your API key securely here
+HARDCODED_API_KEY = "test_dummy_api_key_123456789"
+
+def set_infracost_api_key(api_key: str):
+    result = subprocess.run(
+        ["infracost", "configure", "set", "api_key", api_key],
+        capture_output=True,
+        text=True
+    )
+    if result.returncode != 0:
+        print("❌ Failed to set Infracost API key:", result.stderr)
+        exit(1)
+
+def get_infracost_api_key():
+    result = subprocess.run(
+        ["infracost", "configure", "get", "api_key"],
+        capture_output=True,
+        text=True
+    )
+    return result.stdout.strip() if result.returncode == 0 else None
+
+# Set the API key
+set_infracost_api_key(HARDCODED_API_KEY)
+
+# Get it from config to confirm
+INFRACOST_API_KEY = get_infracost_api_key()
+if not INFRACOST_API_KEY:
+    print("❌ Infracost API key not set.")
     exit(1)
 
-INFRACOST_API_KEY = sys.argv[1]
-GITHUB_TOKEN = sys.argv[2]
-
-# Export for subprocess
+# Export for subprocess CLI calls
 os.environ["INFRACOST_API_KEY"] = INFRACOST_API_KEY
 
+GITHUB_TOKEN = os.getenv("INFRACOST_GITHUB_TOKEN")
 REPO = os.getenv("GITHUB_REPOSITORY")
 PR_NUMBER = os.getenv("GITHUB_REF").split('/')[-2]
 
-# Debug output — remove in production
-print(f"[DEBUG] Retrieved INFRACOST_API_KEY: {INFRACOST_API_KEY}")
+print(f"[DEBUG] INFRACOST_API_KEY set to: {INFRACOST_API_KEY}")  # Optional debug
 
 def run_infracost(plan_file):
     result = subprocess.run([
