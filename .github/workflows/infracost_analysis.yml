@@ -26,14 +26,6 @@ jobs:
           pip install requests
           curl -s https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | bash
 
-      - name: Configure Infracost API Key (manually for this test)
-        run: infracost configure set api_key test_dummy_api_key_123456789
-
-      - name: Read Infracost API Key
-        id: get_key
-        run: |
-          echo "key=$(infracost configure get api_key)" >> $GITHUB_OUTPUT
-
       - name: Generate Terraform Plan
         run: |
           terraform -chdir=terraform_config init
@@ -41,5 +33,6 @@ jobs:
           terraform -chdir=terraform_config show -json tfplan.binary > terraform_config/tfplan.json
 
       - name: Run Infracost Analysis
-        run: |
-          python .github/scripts/infracost_analysis.py "${{ steps.get_key.outputs.key }}" "${{ secrets.INFRACOST_GITHUB_TOKEN }}"
+        run: python .github/scripts/infracost_analysis.py
+        env:
+          INFRACOST_GITHUB_TOKEN: ${{ secrets.INFRACOST_GITHUB_TOKEN }}
