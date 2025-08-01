@@ -1,0 +1,55 @@
+name: Infracost Analysis
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  infracost:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.x'
+
+      - name: Install Infracost CLI & Python deps
+        run: |
+          pip install requests
+          curl -s https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
+          echo "$HOME/bin" >> $GITHUB_PATH
+
+      - name: Export API keys to environment
+        run: |
+          echo "INFRACOST_API_KEY=${{ secrets.INFRACOST_API_KEY }}" >> $GITHUB_ENV
+          echo "INFRACOST_GITHUB_TOKEN=${{ secrets.INFRACOST_GITHUB_TOKEN }}" >> $GITHUB_ENV
+
+      - name: Fetch PR diff and filter Terraform files
+        run: |
+          git fetch origin ${{ github.base_ref }}
+          git diff --name-only origin/${{ github.base_ref }} > changed_files.txt
+          grep '\.tf$' changed_files.txt > tf_files.txt || true
+
+      - name: Generate Terraform Plan JSON (if needed)
+        run: |
+          if [ -s tf_files.txt ]; then
+            for dir in $(xargs -a tf_files.txt -n1 dirname | sort -u); do
+              echo "Generating plan for $dir"
+              cd "$dir"
+              terraform init -input=false || true
+              terraform plan -out=tfplan -input=false || true
+              terraform show -json tfplan > tfplan.json || true
+              cd -
+            done
+          fi
+
+      - name: Run Infracost Analysis
+        run: python .github/scripts/infracost_analysis.py
