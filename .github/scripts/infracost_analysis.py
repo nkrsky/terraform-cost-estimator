@@ -1,16 +1,25 @@
 import os
+import sys
 import subprocess
 import json
 import requests
 from pathlib import Path
 
-GITHUB_TOKEN = os.getenv("INFRACOST_GITHUB_TOKEN")
-INFRACOST_API_KEY = os.getenv("INFRACOST_API_KEY")
+if len(sys.argv) < 3:
+    print("❌ Missing required arguments: INFRACOST_API_KEY and GITHUB_TOKEN")
+    exit(1)
+
+INFRACOST_API_KEY = sys.argv[1]
+GITHUB_TOKEN = sys.argv[2]
+
+# Export for subprocess
+os.environ["INFRACOST_API_KEY"] = INFRACOST_API_KEY
+
 REPO = os.getenv("GITHUB_REPOSITORY")
 PR_NUMBER = os.getenv("GITHUB_REF").split('/')[-2]
 
-# Print the API key to confirm it's loaded (WARNING: Avoid in production)
-print(f"[DEBUG] INFRACOST_API_KEY: {INFRACOST_API_KEY}")
+# Debug output — remove in production
+print(f"[DEBUG] Retrieved INFRACOST_API_KEY: {INFRACOST_API_KEY}")
 
 def run_infracost(plan_file):
     result = subprocess.run([
@@ -19,7 +28,7 @@ def run_infracost(plan_file):
         "--format", "json",
         "--log-level", "error"
     ], capture_output=True, text=True)
-    
+
     if result.returncode != 0:
         print(f"❌ Infracost failed on {plan_file}: {result.stderr}")
         return None
