@@ -1,4 +1,4 @@
-name: Infracost Analysis
+name: Infracost PR Analysis
 
 on:
   pull_request:
@@ -9,11 +9,11 @@ permissions:
   contents: read
 
 jobs:
-  infracost:
+  infracost_analysis:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout Code
         uses: actions/checkout@v4
 
       - name: Set up Python
@@ -21,35 +21,25 @@ jobs:
         with:
           python-version: '3.x'
 
-      - name: Install Infracost CLI & Python deps
+      - name: Install Dependencies
         run: |
           pip install requests
-          curl -s https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | sh
-          echo "$HOME/bin" >> $GITHUB_PATH
+          curl -s https://raw.githubusercontent.com/infracost/infracost/master/scripts/install.sh | bash
 
-      - name: Export API keys to environment
-        run: |
-          echo "INFRACOST_API_KEY=${{ secrets.INFRACOST_API_KEY }}" >> $GITHUB_ENV
-          echo "INFRACOST_GITHUB_TOKEN=${{ secrets.INFRACOST_GITHUB_TOKEN }}" >> $GITHUB_ENV
+      - name: Configure Infracost API Key (manually for this test)
+        run: infracost configure set api_key test_dummy_api_key_123456789
 
-      - name: Fetch PR diff and filter Terraform files
+      - name: Read Infracost API Key
+        id: get_key
         run: |
-          git fetch origin ${{ github.base_ref }}
-          git diff --name-only origin/${{ github.base_ref }} > changed_files.txt
-          grep '\.tf$' changed_files.txt > tf_files.txt || true
+          echo "key=$(infracost configure get api_key)" >> $GITHUB_OUTPUT
 
-      - name: Generate Terraform Plan JSON (if needed)
+      - name: Generate Terraform Plan
         run: |
-          if [ -s tf_files.txt ]; then
-            for dir in $(xargs -a tf_files.txt -n1 dirname | sort -u); do
-              echo "Generating plan for $dir"
-              cd "$dir"
-              terraform init -input=false || true
-              terraform plan -out=tfplan -input=false || true
-              terraform show -json tfplan > tfplan.json || true
-              cd -
-            done
-          fi
+          terraform -chdir=terraform_config init
+          terraform -chdir=terraform_config plan -out=tfplan.binary
+          terraform -chdir=terraform_config show -json tfplan.binary > terraform_config/tfplan.json
 
       - name: Run Infracost Analysis
-        run: python .github/scripts/infracost_analysis.py
+        run: |
+          python .github/scripts/infracost_analysis.py "${{ steps.get_key.outputs.key }}" "${{ secrets.INFRACOST_GITHUB_TOKEN }}"
